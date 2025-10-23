@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Healthcare Assistant — Portal Prototype</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #111827; }
+    .container { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+    .panel { border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+    .panel h3 { margin-top: 0; font-size: 16px; color: #0f172a; }
+    .placeholder { width: 100%; height: 420px; background: #f3f4f6; display:flex; align-items:center; justify-content:center; color:#6b7280; border-radius:8px; }
+    .note { font-size: 13px; color: #374151; margin-top:8px }
+    .controls { margin-top: 14px }
+    input[type=file] { display:block; }
+    .instructions { margin-bottom: 12px; color:#374151 }
+    .full { max-width: 1200px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <div class="full">
+    <h1>Healthcare Assistant — Portal Prototype</h1>
+    <p class="instructions">Place or upload screenshots into the `docs/images/` folder using these filenames, or use the file pickers below to preview them locally:</p>
+    <ul>
+      <li><code>docs/images/upload_panel.png</code> — Upload / Index screen</li>
+      <li><code>docs/images/chat_panel.png</code> — Chat interface</li>
+      <li><code>docs/images/answer_panel.png</code> — Answer with sources</li>
+    </ul>
+
+    <div class="controls">
+      <label>Upload preview for Upload / Index panel: <input id="f1" type="file" accept="image/*"></label>
+      <label>Upload preview for Chat panel: <input id="f2" type="file" accept="image/*"></label>
+      <label>Upload preview for Answer panel: <input id="f3" type="file" accept="image/*"></label>
+    </div>
+
+    <div class="container" style="margin-top:18px">
+      <div class="panel">
+        <h3>1. Upload / Index</h3>
+        <div id="p1" class="placeholder">No image — drop <code>docs/images/upload_panel.png</code></div>
+        <div class="note">This panel shows uploading PDFs, index progress, and file list.</div>
+      </div>
+
+      <div class="panel">
+        <h3>2. Chat interface</h3>
+        <div id="p2" class="placeholder">No image — drop <code>docs/images/chat_panel.png</code></div>
+        <div class="note">This panel shows the chat, example prompts, and input box.</div>
+      </div>
+
+      <div class="panel">
+        <h3>3. Answer & Sources</h3>
+        <div id="p3" class="placeholder">No image — drop <code>docs/images/answer_panel.png</code></div>
+        <div class="note">Answer with synthesized text and citations or source quotes.</div>
+      </div>
+    </div>
+
+    <p style="margin-top:18px; color:#374151">Tip: If you want the images baked into the repo, name them as listed above and commit them to `Healthcare_Assistant/docs/images/` — the prototype will show them automatically.</p>
+  </div>
+
+  <script>
+    function fileToDataUrl(file, cb) {
+      const reader = new FileReader();
+      reader.onload = e => cb(e.target.result);
+      reader.readAsDataURL(file);
+    }
+    document.getElementById('f1').addEventListener('change', e => {
+      const f = e.target.files[0]; if (!f) return; fileToDataUrl(f, d => {
+        document.getElementById('p1').innerHTML = '<img src="'+d+'" style="max-width:100%; max-height:420px; border-radius:6px;">';
+      });
+    });
+    document.getElementById('f2').addEventListener('change', e => {
+      const f = e.target.files[0]; if (!f) return; fileToDataUrl(f, d => {
+        document.getElementById('p2').innerHTML = '<img src="'+d+'" style="max-width:100%; max-height:420px; border-radius:6px;">';
+      });
+    });
+    document.getElementById('f3').addEventListener('change', e => {
+      const f = e.target.files[0]; if (!f) return; fileToDataUrl(f, d => {
+        document.getElementById('p3').innerHTML = '<img src="'+d+'" style="max-width:100%; max-height:420px; border-radius:6px;">';
+      });
+    });
+
+    // Try to load default images from docs/images if present
+    function tryLoadDefault(id, path) {
+      fetch(path).then(r => {
+        if (!r.ok) throw new Error('no');
+        return r.blob();
+      }).then(blob => {
+        const url = URL.createObjectURL(blob);
+        document.getElementById(id).innerHTML = '<img src="'+url+'" style="max-width:100%; max-height:420px; border-radius:6px;">';
+      }).catch(()=>{});
+    }
+    tryLoadDefault('p1','images/upload_panel.png');
+    tryLoadDefault('p2','images/chat_panel.png');
+    tryLoadDefault('p3','images/answer_panel.png');
+  </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Healthcare Assistant portal diagram: three-panel mockup with
+     placeholders for screenshots. Open this file in a browser or editor. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <style>
+    .title { font: bold 20px sans-serif; fill: #1f2937 }
+    .subtitle { font: 14px sans-serif; fill: #374151 }
+    .panel { fill: #ffffff; stroke: #d1d5db; stroke-width: 1.5; rx: 10; }
+    .ph { fill: #f3f4f6; stroke: #e5e7eb; }
+    .label { font: 13px sans-serif; fill: #111827 }
+    .arrow { stroke: #9ca3af; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    .note { font: 12px sans-serif; fill: #374151 }
+  </style>
+
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9ca3af" />
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="30" y="36" class="title">Healthcare Assistant — App Flow & Portal Mockups</text>
+  <text x="30" y="58" class="subtitle">Three panels: Upload / Index → Chat → Answer with Sources (drop screenshot placeholders)</text>
+
+  <!-- Panel 1: Upload / Index -->
+  <rect x="40" y="90" width="340" height="420" class="panel" />
+  <text x="60" y="120" class="label">1. Upload / Index</text>
+  <rect x="60" y="140" width="300" height="260" class="ph" />
+  <text x="80" y="170" class="note">Screenshot placeholder: Upload PDFs</text>
+  <text x="80" y="200" class="note">(file list, progress, index status)</text>
+  <rect x="80" y="420" width="120" height="36" rx="6" fill="#10b981" />
+  <text x="95" y="445" class="label" fill="#ffffff">Start indexing</text>
+
+  <!-- Panel 2: Chat -->
+  <rect x="430" y="90" width="340" height="420" class="panel" />
+  <text x="450" y="120" class="label">2. Chat interface</text>
+  <rect x="450" y="140" width="300" height="260" class="ph" />
+  <text x="470" y="170" class="note">Screenshot placeholder: Chat window</text>
+  <text x="470" y="200" class="note">(user messages, context, examples)</text>
+  <rect x="450" y="420" width="300" height="36" rx="6" fill="#3b82f6" />
+  <text x="560" y="445" class="label" fill="#ffffff">Send question</text>
+
+  <!-- Panel 3: Answer with sources -->
+  <rect x="820" y="90" width="340" height="420" class="panel" />
+  <text x="840" y="120" class="label">3. Answer & Sources</text>
+  <rect x="840" y="140" width="300" height="260" class="ph" />
+  <text x="860" y="170" class="note">Screenshot placeholder: Answer panel</text>
+  <text x="860" y="200" class="note">(assistant reply, citations, quotes)</text>
+  <rect x="860" y="420" width="120" height="36" rx="6" fill="#ef4444" />
+  <text x="880" y="445" class="label" fill="#ffffff">Download PDF</text>
+
+  <!-- arrows -->
+  <path d="M380 300 L430 300" class="arrow" />
+  <path d="M770 300 L820 300" class="arrow" />
+
+  <!-- Example annotations -->
+  <text x="60" y="490" class="note">Users upload PDFs, convert text files, and run indexing. Index status shown here.</text>
+  <text x="450" y="490" class="note">Type questions in the input box; example prompts can be clickable suggestions in the sidebar.</text>
+  <text x="820" y="490" class="note">Answers include synthesized text and optional sources/page citations if available.</text>
+
+  <!-- small legend -->
+  <rect x="40" y="530" width="16" height="16" rx="3" fill="#f3f4f6" stroke="#e5e7eb" />
+  <text x="64" y="544" class="note">Screenshot placeholder — replace with real screenshots by opening the SVG in an editor and pasting images (or use HTML/CSS prototype).</text>
+
+  <text x="40" y="580" class="note">Generated: portal_diagram.svg — replace placeholders with actual screenshots exported from the running app.</text>
+</svg>

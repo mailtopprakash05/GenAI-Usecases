@@ -1,0 +1,39 @@
+Common Diseases and Conditions Guide
+
+1. Type 2 Diabetes
+Description: A chronic condition affecting how the body processes blood sugar (glucose).
+Symptoms:
+- Increased thirst and frequent urination
+- Increased hunger
+- Fatigue
+- Blurred vision
+Treatment:
+- Lifestyle changes (diet and exercise)
+- Blood sugar monitoring
+- Medications (metformin, sulfonylureas)
+- Regular medical check-ups
+
+2. Hypertension (High Blood Pressure)
+Description: A condition where blood pressure against artery walls is consistently too high.
+Symptoms:
+- Often asymptomatic
+- Headaches in severe cases
+- Shortness of breath
+Treatment:
+- Lifestyle modifications
+- Reduced salt intake
+- Regular exercise
+- Blood pressure medications
+
+3. Asthma
+Description: A condition causing airways to narrow and swell, producing extra mucus.
+Symptoms:
+- Shortness of breath
+- Chest tightness
+- Wheezing
+- Coughing
+Treatment:
+- Inhaled corticosteroids
+- Bronchodilators
+- Avoiding triggers
+- Action plan for attacks
