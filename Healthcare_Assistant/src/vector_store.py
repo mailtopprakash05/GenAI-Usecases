@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List
+from typing import List, Dict
 import faiss
 import traceback
 # Try to import a LangChain OpenAI embeddings wrapper from a couple of
@@ -22,6 +22,9 @@ except Exception:
     openai = None
 from collections import Counter
 import math
+from pathlib import Path
+import json
+import pickle
 
 
 def _simple_tfidf_fit_transform(docs: List[str]):
@@ -93,10 +96,19 @@ class VectorStore:
         self.api_key = api_key
         self.mode = "openai"
         self.index = None
-        self.texts: List[str] = []
+        # texts is a list of dicts: {'text': str, 'meta': {...}}
+        self.texts: List[Dict] = []
+        # plain_texts is a parallel list of strings used for embeddings/tfidf
+        self.plain_texts: List[str] = []
         # TF-IDF fallback members (pure-Python)
         self.tfidf_vectors = None
         self.idf = None
+        # Persistence paths (store FAISS index and metadata in data/faiss_index)
+        self.index_dir = Path(__file__).resolve().parent.parent / "data" / "faiss_index"
+        self.index_dir.mkdir(parents=True, exist_ok=True)
+        self.faiss_index_path = self.index_dir / "index.faiss"
+        self.texts_path = self.index_dir / "texts.json"
+        self.tfidf_path = self.index_dir / "tfidf.pkl"
 
         # Try to initialize OpenAI embeddings. If this fails (network/DNS),
         # we'll switch to TF-IDF mode.
@@ -117,21 +129,81 @@ class VectorStore:
                 self.embeddings = None
                 self.mode = "tfidf"
 
-    def create_index(self, texts: List[str]):
-        """Create an index from text chunks. Uses FAISS with OpenAI embeddings
+        # Try to load a persisted FAISS index if present. This avoids re-embedding
+        # and re-building the index on every app start when the index was already
+        # created previously.
+        try:
+            if self.faiss_index_path.exists() and self.texts_path.exists():
+                try:
+                    self.index = faiss.read_index(str(self.faiss_index_path))
+                    with open(self.texts_path, 'r', encoding='utf-8') as f:
+                        self.texts = json.load(f)
+                    # Normalize older format (list of strings) to list of dicts
+                    if self.texts and isinstance(self.texts[0], str):
+                        self.texts = [{'text': t, 'meta': {}} for t in self.texts]
+                    # Create parallel plain_texts list used for embeddings/tfidf
+                    self.plain_texts = [t.get('text', '') if isinstance(t, dict) else str(t) for t in self.texts]
+                    # If embeddings aren't available, keep mode as tfidf to avoid
+                    # attempting to embed queries. If embeddings exist, keep openai mode.
+                    if self.embeddings is None:
+                        self.mode = 'tfidf'
+                except Exception:
+                    # If loading fails, remove partial files and continue
+                    try:
+                        self.faiss_index_path.unlink()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def create_index(self, texts: List[Dict]):
+        """Create an index from text chunks. `texts` should be a list of dicts
+        with keys 'text' and optional 'meta'. Uses FAISS with OpenAI embeddings
         when available, otherwise fits a TF-IDF vectorizer as a local fallback.
         """
+        # normalize incoming format: convert list[str] -> list[dict]
+        if texts and isinstance(texts[0], str):
+            texts = [{'text': t, 'meta': {}} for t in texts]
+
         self.texts = texts
+        self.plain_texts = [t.get('text', '') if isinstance(t, dict) else str(t) for t in texts]
 
         if self.mode == "openai" and self.embeddings is not None:
             try:
-                embeddings = self.embeddings.embed_documents(texts)
+                # If a persisted FAISS index exists and matches the number of
+                # texts, reuse it instead of re-embedding.
+                if self.faiss_index_path.exists() and self.texts_path.exists():
+                    try:
+                        with open(self.texts_path, 'r', encoding='utf-8') as f:
+                            existing_texts = json.load(f)
+                        # Normalize older format
+                        if existing_texts and isinstance(existing_texts[0], str):
+                            existing_texts = [{'text': t, 'meta': {}} for t in existing_texts]
+                        if existing_texts == texts and self.index is not None:
+                            # Index matches current texts; reuse it
+                            return
+                    except Exception:
+                        # continue to rebuild index
+                        pass
+
+                # Create embeddings from plain texts
+                embeddings = self.embeddings.embed_documents(self.plain_texts)
                 embeddings_array = np.array(embeddings).astype("float32")
 
                 # Create FAISS index
                 dimension = embeddings_array.shape[1]
                 self.index = faiss.IndexFlatL2(dimension)
                 self.index.add(embeddings_array)
+
+                # Persist index and texts for faster startup next time
+                try:
+                    faiss.write_index(self.index, str(self.faiss_index_path))
+                    with open(self.texts_path, 'w', encoding='utf-8') as f:
+                        json.dump(texts, f, ensure_ascii=False)
+                except Exception:
+                    # Non-fatal: if persistence fails, continue without it
+                    traceback.print_exc()
+
                 return
             except Exception:
                 # If embeddings call failed (network), fall back to TF-IDF
@@ -140,19 +212,63 @@ class VectorStore:
 
         # TF-IDF fallback (pure-Python)
         if self.mode == "tfidf":
-            self.tfidf_vectors, self.idf = _simple_tfidf_fit_transform(texts)
+            # If a persisted TF-IDF exists and texts match, load it
+            try:
+                if self.tfidf_path.exists() and self.texts_path.exists():
+                    with open(self.texts_path, 'r', encoding='utf-8') as f:
+                        existing = json.load(f)
+                    # Normalize older format
+                    if existing and isinstance(existing[0], str):
+                        existing = [{'text': t, 'meta': {}} for t in existing]
+                    if existing == texts:
+                        with open(self.tfidf_path, 'rb') as pf:
+                            obj = pickle.load(pf)
+                            self.tfidf_vectors = obj.get('tfidf_vectors')
+                            self.idf = obj.get('idf')
+                            return
+            except Exception:
+                pass
 
-    def search(self, query: str, k: int = 5) -> List[str]:
+            # Fit TF-IDF on plain text strings
+            self.tfidf_vectors, self.idf = _simple_tfidf_fit_transform(self.plain_texts)
+            # Persist tfidf data for next runs
+            try:
+                with open(self.texts_path, 'w', encoding='utf-8') as f:
+                    json.dump(texts, f, ensure_ascii=False)
+                with open(self.tfidf_path, 'wb') as pf:
+                    pickle.dump({'tfidf_vectors': self.tfidf_vectors, 'idf': self.idf}, pf)
+            except Exception:
+                pass
+
+    def search(self, query: str, k: int = 5) -> List[dict]:
         """Search for relevant documents using the query.
 
-        Returns the top-k text chunks (or fewer if not available).
+        Returns a list of dicts with keys: 'text', 'doc_id', 'score', 'source'.
+        'source' will be either 'faiss' or 'tfidf'. Scores are floats where
+        higher usually indicates more relevant (for TF-IDF cosine similarity)
+        and for FAISS the distance value is included (lower is better).
         """
+        results = []
         if self.mode == "openai" and self.embeddings is not None and self.index is not None:
             try:
                 query_embedding = self.embeddings.embed_query(query)
                 query_embedding = np.array([query_embedding]).astype("float32")
                 distances, indices = self.index.search(query_embedding, k)
-                return [self.texts[i] for i in indices[0] if i < len(self.texts)]
+                # distances is a 2D array of L2 distances; lower is better
+                for dist, idx in zip(distances[0], indices[0]):
+                    if idx < 0 or idx >= len(self.texts):
+                        continue
+                    item = self.texts[int(idx)]
+                    meta = item.get('meta', {}) if isinstance(item, dict) else {}
+                    results.append({
+                        'text': item.get('text') if isinstance(item, dict) else item,
+                        'doc_id': int(idx),
+                        'score': float(dist),
+                        'source': 'faiss',
+                        'source_file': meta.get('source'),
+                        'page': meta.get('page')
+                    })
+                return results
             except Exception:
                 # If embeddings fail at query time, switch to TF-IDF fallback
                 traceback.print_exc()
@@ -176,5 +292,17 @@ class VectorStore:
 
         sims = [(_simple_cosine_similarity(q_vec, d), idx) for idx, d in enumerate(self.tfidf_vectors)]
         sims.sort(key=lambda x: x[0], reverse=True)
-        results = [self.texts[idx] for score, idx in sims[:k] if score > 0]
+        for score, idx in sims[:k]:
+            if score <= 0:
+                continue
+            item = self.texts[int(idx)]
+            meta = item.get('meta', {}) if isinstance(item, dict) else {}
+            results.append({
+                'text': item.get('text') if isinstance(item, dict) else item,
+                'doc_id': int(idx),
+                'score': float(score),
+                'source': 'tfidf',
+                'source_file': meta.get('source'),
+                'page': meta.get('page')
+            })
         return results

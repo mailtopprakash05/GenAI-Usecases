@@ -1,0 +1,196 @@
+# Healthcare Assistant — Complete Documentation
+
+## Overview
+This document explains everything you need to run the Healthcare Assistant demo locally on Windows (PowerShell). The app is a Retrieval-Augmented Generation (RAG) demo that reads PDFs from the `data/` folder, builds/reuses a FAISS vector index (with OpenAI embeddings when available), retrieves relevant chunks for user queries, and synthesizes answers via an OpenAI chat model. A TF‑IDF fallback ensures retrieval still works when embeddings or network access is unavailable.
+
+This file covers:
+- Exact packages used
+- Step-by-step setup and run instructions (PowerShell)
+- How indexing and retrieval work (architecture diagram)
+- How to tell whether a result came from FAISS, TF‑IDF (local), or the LLM
+- Where index files are stored
+- Troubleshooting and FAQ
+
+## Packages (primary)
+The project relies on the following Python packages. The repo includes `requirements.txt` under `Healthcare_Assistant/` but the main packages are:
+
+- Python 3.10+ (use a venv)
+- streamlit — app UI
+- openai — OpenAI API calls (embeddings + chat)
+- faiss-cpu==1.12.0 — FAISS vector index (native/CPU)
+- python-dotenv — load .env variables
+- pydantic — request/response validation
+- requests — direct HTTP fallback for OpenAI REST calls
+- (optional) langchain or langchain-openai — optional wrapper for embeddings if installed
+
+Note about FAISS on Windows: `faiss-cpu` is available via pip for some Windows builds, but if pip install fails you can use `conda` (recommended) or prebuilt wheels. See Troubleshooting.
+
+## Files & Persistent paths
+- `Healthcare_Assistant/src/app.py` — Streamlit front-end and orchestration
+- `Healthcare_Assistant/src/vector_store.py` — index creation and retrieval (FAISS + TF‑IDF fallback)
+- `Healthcare_Assistant/src/document_loader.py` — PDF reading and chunking logic
+- `Healthcare_Assistant/data/` — place your PDF files here
+- `Healthcare_Assistant/data/faiss_index/` — persisted index artifacts (created when index is built):
+  - `index.faiss` — FAISS index file
+  - `texts.json` — list of text chunks that were indexed
+  - `tfidf.pkl` — serialized TF‑IDF structures (optional fallback)
+
+## Quick setup and run (PowerShell)
+Open PowerShell and run these commands from the repository root (`c:\pp\GitHub\GenAI-Usecases`). Replace `<your-key>` with your OpenAI API key if you want to set it as an env var.
+
+1) Create & activate a venv
+
+```powershell
+python -m venv .venv
+# Activate the venv
+& .venv\Scripts\Activate.ps1
+```
+
+2) Install dependencies
+
+```powershell
+pip install -U pip
+pip install -r .\Healthcare_Assistant\requirements.txt
+```
+
+If `faiss-cpu` fails on pip, see Troubleshooting below (conda alternative).
+
+3) (Optional) set OPENAI_API_KEY as an environment variable for the session
+
+```powershell
+$env:OPENAI_API_KEY = "sk-..."
+```
+
+You can also paste the API key into the app sidebar at runtime (it's stored only in memory for the session).
+
+4) Start the Streamlit app
+
+```powershell
+cd .\Healthcare_Assistant\src
+streamlit run app.py
+```
+
+The Streamlit UI usually opens at `http://localhost:8501` (or the local URL printed in terminal). Use the chat input to ask clinical or wellness questions.
+
+## First run / Indexing
+- On first run the app will load PDFs from `Healthcare_Assistant/data/` and attempt to create a FAISS index.
+- If the persisted index files already exist and match the texts, the app will reuse them and skip re-embedding.
+- You can force a rebuild by clicking the "Rebuild index" button in the sidebar (this removes persisted artifacts and asks you to refresh/re-run to rebuild). Note: rebuilding triggers OpenAI embeddings for all chunks and can use quota.
+
+## How retrieval + generation works (architecture)
+
+High-level flow (ASCII diagram):
+
+```
+[PDFs in data/]  ->  [DocumentLoader]  ->  [Chunked texts]
+                                  |                  
+                                  v
+                      [Embeddings via OpenAI] (if available)
+                                  |
+                            [FAISS Index]
+                                 / \
+                                /   \
+        Query -> [Retriever] --/     \-- TF-IDF fallback (local)
+                                 \     /
+                                  \   /
+                                   v v
+                               Retrieved chunks
+                                   |
+                             [Prompt assembly]
+                                   |
+                             [OpenAI Chat LLM]
+                                   |
+                               Final answer
+
+
+If embeddings or FAISS are unavailable, the system falls back to a TF‑IDF retriever and may return local excerpts instead of an LLM-generated synthesis (lower quality).
+```
+
+## Provenance: how to tell where results came from
+The app now surfaces provenance in three ways:
+
+1) UI caption under the assistant reply (small text):
+   - "Answer generated by LLM (retrieval used: faiss)" — the LLM produced the final answer and FAISS provided retrieved chunks.
+   - "Answer provided from local retrieval only (no LLM). Retrieval source: tfidf" — OpenAI generation failed and the app returned local excerpts.
+   - Other variants: the caption will include the retrieval sources used, e.g. `faiss`, `tfidf`, or `none`.
+
+2) Expander: "Show retrieved documents and provenance" — expand to see the top retrieved chunks, each with:
+   - Doc id (index into `texts.json`)
+   - Source: `faiss` or `tfidf`
+   - Score: numeric score (FAISS L2 distance or TF‑IDF cosine similarity)
+   - The chunk text (trimmed for readability)
+
+3) Programmatic (session) access: assistant messages stored in `st.session_state.messages` include a `meta` field for assistant entries, e.g.
+
+```python
+last = st.session_state.messages[-1]
+meta = last.get('meta', {})
+provenance = meta.get('provenance')            # 'llm' or 'local_fallback'
+retrieval_sources = meta.get('retrieval_sources')  # ['faiss'] or ['tfidf']
+```
+
+### Interpreting scores
+- FAISS `score` is an L2 distance: lower means closer (more similar). Smaller is better.
+- TF‑IDF `score` is cosine similarity (0..1): higher means more similar. Larger is better.
+The app shows the raw values for debugging; future updates may present a normalized relevance metric.
+
+## Sample prompts and usage tips
+- "What screening is recommended for type 2 diabetes in adults?"
+- "Summarize the recommended screening intervals for colorectal cancer."
+- "Explain like I'm a patient: what is hypertension?"
+- To request citations: append "Please cite the document names or include short quotes from the source." The app will include retrieved snippets where available.
+
+## Troubleshooting
+
+1) Streamlit fails to start / missing packages
+- Ensure your venv is active and `pip install -r Healthcare_Assistant/requirements.txt` completed without errors.
+
+2) FAISS installation issues on Windows
+- If `pip install faiss-cpu` fails, prefer using conda (recommended):
+
+```powershell
+# (requires conda/miniconda)
+conda create -n healthai python=3.10 -y
+conda activate healthai
+conda install -c conda-forge faiss-cpu -y
+pip install -r .\Healthcare_Assistant\requirements.txt
+```
+
+- Alternatively, search for a prebuilt Windows wheel for `faiss-cpu` matching your Python version.
+
+3) OpenAI errors (quota, rate limit, invalid key)
+- If you get quota/rate limit errors, the app will try:
+  1. Retry with reduced max_tokens
+  2. Retry with `gpt-3.5-turbo` (smaller model)
+  3. Fall back to local TF‑IDF retrieval (lower-quality, immediate answer)
+- Check your usage and billing on the OpenAI dashboard. Try replacing the key in the sidebar.
+
+4) Index rebuild crashes or app rerun issues
+- Some Streamlit runtimes can raise when programmatically calling `st.experimental_rerun()` from certain contexts. If you see a crash, the app will tell you to refresh the page after index files are removed.
+
+## Security & privacy notes
+- The sidebar API key input stores the key only in memory for the Streamlit session and does not persist it to disk.
+- The app sends data to OpenAI if an API key is supplied and embeddings/generation are used. Be careful not to include patient-identifiable or private health information during testing unless you have appropriate data handling and consent.
+
+## Advanced: add citations (future)
+- The `DocumentLoader` currently returns chunked text; to add filename and page-level citations to retrieved metadata we need the loader to attach `filename` and `page` per chunk and persist those alongside `texts.json`. If you want, I can add file + page metadata to the stored index and make the LLM include inline citations like "(Source: common_diseases.pdf, page 2)" in generated answers.
+
+## Where to look next in the code
+- `Healthcare_Assistant/src/vector_store.py` — see `create_index` and `search`.
+  - `search(query)` returns a list of dicts: `{'text','doc_id','score','source'}`
+- `Healthcare_Assistant/src/app.py` — UI orchestration and how we assemble the prompt and call the LLM. Search for `retrieval_sources` and `response_provenance` to see provenance handling.
+
+## Quick checklist before asking clinical questions
+- Start the app and confirm the sidebar shows "FAISS index: loaded from disk" or "not found".
+- Add PDFs to `Healthcare_Assistant/data/` if none are present.
+- If you want to rebuild, use "Rebuild index" (remember it may trigger embedding calls).
+- Paste or set your OpenAI key in the sidebar if you want LLM generation.
+
+---
+
+If you want, I can now:
+- Add filename + page numbers to retrieved metadata and show them in the expander.
+- Change FAISS L2 distances to a normalized 0..1 relevance score for UI friendliness.
+- Add a small example-questions widget in the sidebar (paste sample prompts into the chat input).
+
+Which of those would you like next?

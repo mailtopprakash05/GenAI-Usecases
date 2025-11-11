@@ -1,5 +1,7 @@
 # GenAI-Usecases — Healthcare Assistant (RAG)
 
+Author: Prakash Pujari
+
 This repository contains a Retrieval-Augmented Generation (RAG) example: a
 healthcare assistant web app built with Streamlit that retrieves information
 from your PDF documents using a FAISS vector store and OpenAI embeddings.
@@ -18,14 +20,24 @@ Contents
 Quick overview
 --------------
 1. Add healthcare PDFs to `Healthcare_Assistant/data/` (diseases, treatments,
-	 wellness, etc.).
+ 	 wellness, etc.).
 2. (Optional) Convert provided `.txt` samples to PDF with the included
-	 converter: `src/convert_to_pdf.py`.
+ 	 converter: `src/convert_to_pdf.py`.
 3. Create and activate a Python virtual environment and install
-	 dependencies.
-4. Set your `OPENAI_API_KEY` in `Healthcare_Assistant/.env`.
+ 	 dependencies.
+4. Provide your `OPENAI_API_KEY` via environment variable or paste it in the app sidebar.
 5. Run the Streamlit app: it will build the vector index and provide a chat
-	 interface for healthcare questions.
+ 	 interface for healthcare questions.
+
+Architecture (high level)
+-------------------------
+- Streamlit frontend (`Healthcare_Assistant/src/app.py`) — UI, API-key handling, and orchestration.
+- Document loader (`Healthcare_Assistant/src/document_loader.py`) — PDF extraction and chunking.
+- Vector store (`Healthcare_Assistant/src/vector_store.py`) — OpenAI embeddings + FAISS primary; TF-IDF fallback for offline or limited environments.
+- OpenAI (chat + embeddings) — used for embeddings and generative answers when API key and quota are available.
+- Local TF-IDF fallback — pure-Python retriever used when OpenAI embeddings or network are unavailable.
+
+See `Healthcare_Assistant/docs/portal_diagram.svg` for an architectural diagram visualizing the components and data flow.
 
 Detailed setup (Windows PowerShell)
 ----------------------------------
@@ -52,16 +64,21 @@ Notes about dependencies
 	using the TF-IDF fallback (the app includes a pure-Python fallback).
 - `langchain-community` is required for some LangChain embeddings imports.
 
+
 3) Configure your OpenAI key
 
-Open (or create) `Healthcare_Assistant\.env` and set:
+You can provide the key in two ways (the app prefers a sidebar override if present):
 
-```text
-OPENAI_API_KEY=sk-...your key...
+- Environment variable (recommended for local runs):
+
+```powershell
+setx OPENAI_API_KEY "sk-...your key..."
 ```
 
+- Or, start the app and paste the key into the left sidebar's "Configuration" box. The key is kept only in memory for that Streamlit session and is not written to disk.
+
 4) (Optional) Convert sample `.txt` files shipped in `Healthcare_Assistant/data`
-	 to PDF using the included converter (the app expects PDFs). Run:
+ 	 to PDF using the included converter (the app prefers PDFs). Run:
 
 ```powershell
 & C:/pp/GitHub/GenAI-Usecases/.venv/Scripts/python.exe Healthcare_Assistant/src/convert_to_pdf.py

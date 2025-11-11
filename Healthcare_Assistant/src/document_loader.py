@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Dict
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -11,8 +11,11 @@ class DocumentLoader:
             length_function=len,
         )
 
-    def load_pdfs(self, directory: str) -> List[str]:
-        """Load PDFs from a directory and return list of text chunks."""
+    def load_pdfs(self, directory: str) -> List[Dict]:
+        """Load PDFs from a directory and return list of text chunks with metadata.
+
+        Each chunk is a dict: {"text": str, "meta": {"source": filename, "page": page_number}}
+        """
         text_chunks = []
 
         # If directory doesn't exist, return empty list instead of throwing
@@ -28,16 +31,22 @@ class DocumentLoader:
                     # skip files that can't be read as PDFs
                     continue
 
-                # Extract text from each page
-                text = ''
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text
+                # Extract text from each page and split per-page so we can
+                # attach page-level metadata to each chunk.
+                for page_idx, page in enumerate(pdf.pages, start=1):
+                    try:
+                        page_text = page.extract_text() or ""
+                    except Exception:
+                        page_text = ""
+                    if not page_text.strip():
+                        continue
 
-                # Split text into chunks
-                if text:
-                    chunks = self.text_splitter.split_text(text)
-                    text_chunks.extend(chunks)
+                    # Split the page text into chunks and attach metadata
+                    chunks = self.text_splitter.split_text(page_text)
+                    for c in chunks:
+                        text_chunks.append({
+                            "text": c,
+                            "meta": {"source": filename, "page": page_idx}
+                        })
 
         return text_chunks
